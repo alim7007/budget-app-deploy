@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: budget-app
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+  namespace: budget-app
+spec:
+  storageClassName: hostpath
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data/postgres"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+  namespace: budget-app
+  labels:
+    app: budget-app
+stringData:
+  POSTGRES_USER: budget_user
+  POSTGRES_PASSWORD: budget_password
+  POSTGRES_DB: budget_app
+  DB_HOST: postgres
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rails-master-key
+  namespace: budget-app
+data:
+  master.key: |
+    3a95f10ae1af6918946e237889ecb2f7
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: budget-app
+spec:
+  serviceName: "postgres"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: db-secret
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: hostpath   # <-- aligned with PV and PVC
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: budget-app
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: budget-app
+  namespace: budget-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: budget-app
+  template:
+    metadata:
+      labels:
+        app: budget-app
+    spec:
+      containers:
+        - name: budget-app
+          image: alimkhan7007/budget-app:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            [
+              "sh", "-c",
+              "until pg_isready -h $DB_HOST -p 5432 -U $POSTGRES_USER; do echo 'Waiting for Postgres...'; sleep 2; done;
+               bundle exec rails db:create db:migrate &&
+               bundle exec puma -C config/puma.rb"
+            ]
+          ports:
+            - containerPort: 3000
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: POSTGRES_DB
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: DB_HOST    # <-- IMPORTANT: This is the name of your Postgres K8s Service
+            - name: RAILS_ENV
+              value: development
+          volumeMounts:
+            - name: master-key
+              mountPath: /app/config/master.key
+              subPath: master.key
+              readOnly: true
+      volumes:
+        - name: master-key
+          configMap:
+            name: rails-master-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: budget-app
+  namespace: budget-app
+spec:
+  selector:
+    app: budget-app
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: budget-app-ingress
+  namespace: budget-app
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: budget.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: budget-app
+                port:
+                  number: 80
