@@ -1,4 +1,4 @@
-FROM ruby:3.1.2
+FROM docker.io/library/ruby:3.1.2
 
 # Install dependencies
 RUN apt-get update -qq && apt-get install -y nodejs postgresql-client yarn
