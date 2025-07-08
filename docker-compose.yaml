@@ -23,15 +23,14 @@ services:
         bundle exec puma -C config/puma.rb
       "
     volumes:
-      - .:/app
-      - ./config/master.key:/app/config/master.key:ro
+      - .:/app     # ✅ Dev-only, keep this only if needed
     ports:
       - "3000:3000"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      DB_HOST: db                  # <-- IMPORTANT: match Compose service name
+      DB_HOST: db
       RAILS_ENV: development
     depends_on:
       - db
