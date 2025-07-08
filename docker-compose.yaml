@@ -22,8 +22,6 @@ services:
         bundle exec rails db:create db:migrate &&
         bundle exec puma -C config/puma.rb
       "
-    volumes:
-      - .:/app     # ✅ Dev-only, keep this only if needed
     ports:
       - "3000:3000"
     environment:
