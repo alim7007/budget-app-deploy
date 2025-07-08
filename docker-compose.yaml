@@ -13,7 +13,8 @@ services:
       - "5432:5432"
 
   web:
-    build: .
+    build:
+      context: .
     command: >
       sh -c "
         until pg_isready -h db -p 5432 -U ${POSTGRES_USER}; do
