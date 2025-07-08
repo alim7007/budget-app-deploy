@@ -301,6 +301,7 @@ DEPENDENCIES
   rails (~> 7.0.1)
   rspec-rails
   rubocop
+  rubyzip (~> 2.3)
   selenium-webdriver
   sprockets-rails
   stimulus-rails
