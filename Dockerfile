@@ -1,7 +1,7 @@
 FROM docker.io/library/ruby:3.1.2
 
 # Install dependencies
-RUN apt-get update -qq && apt-get install -y nodejs postgresql-client yarn
+RUN apt-get update -qq && apt-get install -y nodejs npm postgresql-client yarn
 
 # Set working directory
 WORKDIR /app
